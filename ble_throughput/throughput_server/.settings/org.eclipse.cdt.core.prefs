@@ -1,4 +1,12 @@
 eclipse.preferences.version=1
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/BUILD_BATCH/delimiter=\:
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/BUILD_BATCH/operation=append
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/BUILD_BATCH/value=1
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/IDF_PATH/delimiter=\:
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/IDF_PATH/operation=append
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/IDF_PATH/value=/home/niva/esp/esp-ble-mesh-v0.6.1
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/append=true
+environment/project/cdt.managedbuild.toolchain.gnu.cross.base.1252533909/appendContributed=true
 environment/project/cdt.managedbuild.toolchain.gnu.cross.base.943011566/BATCH_BUILD/delimiter=\:
 environment/project/cdt.managedbuild.toolchain.gnu.cross.base.943011566/BATCH_BUILD/operation=append
 environment/project/cdt.managedbuild.toolchain.gnu.cross.base.943011566/BATCH_BUILD/value=1
