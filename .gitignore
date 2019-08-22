@@ -1,9 +1,8 @@
-CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
+# ignore build files
+/**/build/
+
+#ignore user make configuration
+sdkconfig
+
+#ignore user make configuration backup
+sdkconfig.old
