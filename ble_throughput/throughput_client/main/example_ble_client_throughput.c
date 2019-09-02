@@ -42,8 +42,11 @@
 #define PROFILE_A_APP_ID 0
 #define INVALID_HANDLE   0
 #define SECOND_TO_USECOND          1000000
+#define MAC_ADDRESS_LENGTH 6
 
 static const char remote_device_name[] = "THROUGHPUT_DEMO";
+static const char remote_device_address[] = "30 ae a4 f4 7c f2";
+static uint8_t address_name_len = 17;
 static bool connect    = false;
 static bool get_server = false;
 static esp_gattc_char_elem_t *char_elem_result   = NULL;
@@ -65,11 +68,13 @@ uint8_t write_data[GATTC_WRITE_LEN] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 
 static bool is_connecet = false;
 
-/* eclare static functions */
+/* declare static functions */
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
+/* declare util functions*/
+void hex_array_to_string(const void *hex_arr, const uint16_t buff_len, char *string);
 
 static esp_bt_uuid_t remote_filter_service_uuid = {
     .len = ESP_UUID_LEN_16,
@@ -131,6 +136,26 @@ static uint8_t check_sum(uint8_t *addr, uint16_t count)
     }
 
     return (uint8_t)~sum;
+}
+
+void hex_array_to_string(const void *hex_arr, const uint16_t buff_len, char *string)
+{
+	//function doesn't check the volume of allocated for char pointer memory!
+	if ( buff_len == 0 ) return;
+	char temp_buffer[(buff_len+3)/4*4];   //for not-byte-accessible memory
+	const char *ptr_line;
+
+	if ( !esp_ptr_byte_accessible(hex_arr) ) {
+	    //use memcpy to get around alignment issue
+	    memcpy( temp_buffer, hex_arr, (buff_len+3)/4*4 );
+	    ptr_line = temp_buffer;
+	} else {
+	    ptr_line = hex_arr;
+	}
+
+	for( int i = 0; i < buff_len; i ++ ) {
+	    sprintf( string + 3*i, "%02x ", ptr_line[i] );
+	}
 }
 
 static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
@@ -365,6 +390,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 {
     uint8_t *adv_name = NULL;
     uint8_t adv_name_len = 0;
+    char* bda = (char*)malloc(sizeof(char)*(3*MAC_ADDRESS_LENGTH + 1));
     switch (event) {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT: {
         ESP_LOGI(GATTC_TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT\n");
@@ -385,7 +411,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     case ESP_GAP_BLE_SCAN_RESULT_EVT: {
         esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
         switch (scan_result->scan_rst.search_evt) {
-        case ESP_GAP_SEARCH_INQ_RES_EVT:
+        case ESP_GAP_SEARCH_INQ_RES_EVT: {
             esp_log_buffer_hex(GATTC_TAG, scan_result->scan_rst.bda, 6);
             ESP_LOGI(GATTC_TAG, "searched Adv Data Len %d, Scan Response Len %d", scan_result->scan_rst.adv_data_len, scan_result->scan_rst.scan_rsp_len);
             adv_name = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv,
@@ -393,7 +419,8 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(GATTC_TAG, "searched Device Name Len %d", adv_name_len);
             esp_log_buffer_char(GATTC_TAG, adv_name, adv_name_len);
             ESP_LOGI(GATTC_TAG, "\n");
-            if (adv_name != NULL) {
+            // connect by name
+            /*if (adv_name != NULL) {
                 if (strlen(remote_device_name) == adv_name_len && strncmp((char *)adv_name, remote_device_name, adv_name_len) == 0) {
                     ESP_LOGI(GATTC_TAG, "searched device %s\n", remote_device_name);
                     if (connect == false) {
@@ -404,8 +431,21 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                         esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, scan_result->scan_rst.bda, BLE_ADDR_TYPE_PUBLIC, true);
                     }
                 }
+            }*/
+            // connect by mac-address
+            hex_array_to_string(scan_result->scan_rst.bda, MAC_ADDRESS_LENGTH, bda);
+            if (strncmp(bda, remote_device_address, address_name_len) == 0) {
+                ESP_LOGI(GATTC_TAG, "searched device %s\n", remote_device_name);
+                if (connect == false) {
+                    connect = true;
+                    ESP_LOGI(GATTC_TAG, "connect to the remote device.");
+                    esp_ble_gap_set_prefer_conn_params(scan_result->scan_rst.bda, 32, 32, 0, 600);
+                    esp_ble_gap_stop_scanning();
+                    esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, scan_result->scan_rst.bda, BLE_ADDR_TYPE_PUBLIC, true);
+                }
             }
             break;
+        }
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
             ESP_LOGI(GATTC_TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT\n");
             break;
@@ -442,6 +482,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     default:
         break;
     }
+    free(bda);
 }
 
 static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
