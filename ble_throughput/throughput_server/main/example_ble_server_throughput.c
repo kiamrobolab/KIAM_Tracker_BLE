@@ -6,12 +6,6 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-/****************************************************************************
-*
-* This is the demo to test the BLE throughput. It should be used together with throughput_client demo.
-*
-****************************************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,10 +68,11 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
 
 #define PREPARE_BUF_MAX_SIZE 1024
 
-static uint8_t char1_str[] = {0x11,0x22,0x33};
-static esp_gatt_char_prop_t a_property = 0;
+uint8_t char1_str[] = {0x11,0x22,0x33};
+esp_gatt_char_prop_t a_property = 0;
+esp_gatt_char_prop_t b_property = 0;
 
-static esp_attr_value_t gatts_demo_char1_val =
+esp_attr_value_t gatts_demo_char1_val =
 {
     .attr_max_len = GATTS_DEMO_CHAR_VAL_LEN_MAX,
     .attr_len     = sizeof(char1_str),
@@ -229,12 +224,14 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         break;
 #else
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT\n");
         adv_config_done &= (~adv_config_flag);
         if (adv_config_done == 0){
             esp_ble_gap_start_advertising(&adv_params);
         }
         break;
     case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT\n");
         adv_config_done &= (~scan_rsp_config_flag);
         if (adv_config_done == 0){
             esp_ble_gap_start_advertising(&adv_params);
@@ -242,6 +239,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         break;
 #endif
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_ADV_START_COMPLETE_EVT\n");
         //advertising start complete event to indicate advertising start successfully or failed
         if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
             ESP_LOGE(GATTS_TAG, "Advertising start failed\n");
@@ -463,6 +461,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         ESP_LOGI(GATTS_TAG, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
         break;
     case ESP_GATTS_UNREG_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_UNREG_EVT\n");
         break;
     case ESP_GATTS_CREATE_EVT:
         ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d,  service_handle %d\n", param->create.status, param->create.service_handle);
@@ -481,6 +480,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         }
         break;
     case ESP_GATTS_ADD_INCL_SRVC_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_ADD_INCL_SRVC_EVT\n");
         break;
     case ESP_GATTS_ADD_CHAR_EVT: {
         uint16_t length = 0;
@@ -508,18 +508,19 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         break;
     }
     case ESP_GATTS_ADD_CHAR_DESCR_EVT:
-
         gl_profile_tab[PROFILE_A_APP_ID].descr_handle = param->add_char_descr.attr_handle;
         ESP_LOGI(GATTS_TAG, "ADD_DESCR_EVT, status %d, attr_handle %d, service_handle %d\n",
                  param->add_char_descr.status, param->add_char_descr.attr_handle, param->add_char_descr.service_handle);
         break;
     case ESP_GATTS_DELETE_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_DELETE_EVT\n");
         break;
     case ESP_GATTS_START_EVT:
         ESP_LOGI(GATTS_TAG, "SERVICE_START_EVT, status %d, service_handle %d\n",
                  param->start.status, param->start.service_handle);
         break;
     case ESP_GATTS_STOP_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_STOP_EVT\n");
         break;
     case ESP_GATTS_CONNECT_EVT: {
         is_connecet = true;
@@ -541,7 +542,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
     }
     case ESP_GATTS_DISCONNECT_EVT:
         is_connecet = false;
-        ESP_LOGI(GATTS_TAG, "ESP_GATTS_DISCONNECT_EVT");
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_DISCONNECT_EVT\n");
         esp_ble_gap_start_advertising(&adv_params);
         break;
     case ESP_GATTS_CONF_EVT:
@@ -553,11 +554,16 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
 #endif /* #if (CONFIG_GATTC_WRITE_THROUGHPUT) */
         break;
     case ESP_GATTS_OPEN_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_OPEN_EVT\n");
     case ESP_GATTS_CANCEL_OPEN_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_CANCEL_OPEN_EVT\n");
     case ESP_GATTS_CLOSE_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_CLOSE_EVT\n");
     case ESP_GATTS_LISTEN_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_LISTEN_EVT\n");
         break;
     case ESP_GATTS_CONGEST_EVT:
+        ESP_LOGI(GATTS_TAG, "ESP_GATTS_CONGEST_EVT\n");
 #if (CONFIG_GATTS_NOTIFY_THROUGHPUT)
         if (param->congest.congested) {
             can_send_notify = false;
@@ -643,7 +649,6 @@ void throughput_server_task(void *param)
 void app_main()
 {
     esp_err_t ret;
-    int i=0;
 
     // Initialize NVS.
     ret = nvs_flash_init();
@@ -706,7 +711,6 @@ void app_main()
         ESP_LOGE(GATTS_TAG, "%s, init fail, the gatts semaphore create fail.", __func__);
         return;
     }
-#endif*/
-
+#endif /* #if (CONFIG_GATTS_NOTIFY_THROUGHPUT) */
     return;
 }
