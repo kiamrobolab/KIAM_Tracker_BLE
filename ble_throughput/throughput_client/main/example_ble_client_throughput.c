@@ -138,6 +138,14 @@ static uint8_t check_sum(uint8_t *addr, uint16_t count)
     return (uint8_t)~sum;
 }
 
+/**
+ * @brief           convert hex array to string
+ *
+ * @hex_arr[in]     array of hex numbers
+ * @len[in]         length of the array
+ * @string[out]		pointer to char array
+ */
+
 void hex_array_to_string(const void *hex_arr, const uint16_t buff_len, char *string)
 {
 	//function doesn't check the volume of allocated for char pointer memory!
