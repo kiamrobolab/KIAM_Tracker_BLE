@@ -396,7 +396,7 @@ static void gattc_profile_a_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
             break;
         }
         ESP_LOGI(GATTC_TAG, "write descr success");
-        uint8_t write_char_data[35];
+        /*uint8_t write_char_data[35];
         for (int i = 0; i < sizeof(write_char_data); ++i)
         {
             write_char_data[i] = i % 256;
@@ -407,7 +407,8 @@ static void gattc_profile_a_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
                                   sizeof(write_char_data),
                                   write_char_data,
                                   ESP_GATT_WRITE_TYPE_RSP,
-                                  ESP_GATT_AUTH_REQ_NONE);
+                                  ESP_GATT_AUTH_REQ_NONE);*/
+        start_scan();
         break;
     case ESP_GATTC_SRVC_CHG_EVT: {
         esp_bd_addr_t bda;

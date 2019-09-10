@@ -387,7 +387,10 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         if (!param->write.is_prep){
             ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, value len %d, value :", param->write.len);
             esp_log_buffer_hex(GATTS_TAG, param->write.value, param->write.len);
+            //ESP_LOGI(GATTS_TAG, "I'm here and descriptor handle is %d but handle %d is given.", (int)(gl_profile_tab[PROFILE_A_APP_ID].descr_handle), (int)(param->write.handle));
+            //ESP_LOGI(GATTS_TAG, "I'm here and descriptor handle is %d.", (int)(gl_profile_tab[PROFILE_A_APP_ID].descr_handle));
             if (gl_profile_tab[PROFILE_A_APP_ID].descr_handle == param->write.handle && param->write.len == 2){
+            	//ESP_LOGI(GATTS_TAG, "Descriptor handle is \"write\" handle and length is correct");
                 uint16_t descr_value = param->write.value[1]<<8 | param->write.value[0];
                 if (descr_value == 0x0001){
                     if (a_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY){

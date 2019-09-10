@@ -45,7 +45,7 @@
 #define MAC_ADDRESS_LENGTH 6
 
 static const char remote_device_name[] = "THROUGHPUT_DEMO";
-static const char remote_device_address[] = "30 ae a4 f4 7c f2";
+static const char remote_device_address[] = "30 ae a4 f4 87 da";
 static uint8_t address_name_len = 17;
 static bool connect    = false;
 static bool get_server = false;
