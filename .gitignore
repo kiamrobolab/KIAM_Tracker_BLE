@@ -6,3 +6,8 @@ sdkconfig
 
 #ignore user make configuration backup
 sdkconfig.old
+
+#ignore eclipse files
+.project
+.cproject
+.settings
