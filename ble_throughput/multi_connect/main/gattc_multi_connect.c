@@ -44,6 +44,8 @@
 #define SECOND_TO_USECOND          1000000
 #define MAC_ADDRESS_LENGTH 6
 
+#define NOTIFY_TIMEOUT 10
+
 /* register three profiles, each profile corresponds to one connection,
    which makes it easy to handle each connection event */
 #define PROFILE_NUM 4
@@ -99,6 +101,16 @@ static esp_gattc_char_elem_t  *char_elem_result_c   = NULL;
 static esp_gattc_descr_elem_t *descr_elem_result_c  = NULL;
 static esp_gattc_char_elem_t  *char_elem_result_d   = NULL;
 static esp_gattc_descr_elem_t *descr_elem_result_d  = NULL;
+
+static uint16_t notify_count_a = 0;
+static uint16_t notify_count_b = 0;
+static uint16_t notify_count_c = 0;
+static uint16_t notify_count_d = 0;
+
+static uint16_t no_notify_secs_a = 0;
+static uint16_t no_notify_secs_b = 0;
+static uint16_t no_notify_secs_c = 0;
+static uint16_t no_notify_secs_d = 0;
 
 static bool start = false;
 static uint64_t notify_len = 0;
@@ -201,16 +213,110 @@ static void hex_array_to_string(const void *hex_arr, const uint16_t len, char *s
 
 static void start_scan(void)
 {
-    stop_scan_done = false;
-    Isconnecting = false;
     uint32_t duration = 30;
-    esp_err_t status = esp_ble_gap_start_scanning(duration);
-    if (status == ESP_OK) {
-    	ESP_LOGI(GATTC_TAG, "Start scan success");
+    if (Isconnecting){
+    	Isconnecting = false;
+    	esp_err_t status = esp_ble_gap_start_scanning(duration);
+    	if (status == ESP_OK) {
+    		ESP_LOGI(GATTC_TAG, "Start scan success");
+    	}
+    	else {
+    		ESP_LOGE(GATTC_TAG, "Start scan error, error code = %x", status);
+    	}
+    } else if (stop_scan_done) {
+    	stop_scan_done = false;
+    	esp_err_t status = esp_ble_gap_start_scanning(duration);
+    	if (status == ESP_OK) {
+    		ESP_LOGI(GATTC_TAG, "Start scan success");
+    	}
+    	else {
+    		ESP_LOGE(GATTC_TAG, "Start scan error, error code = %x", status);
+    	}
     }
-    else {
-        ESP_LOGE(GATTC_TAG, "Start scan error, error code = %x", status);
-    }
+}
+
+static void check_connection(uint16_t interval, uint16_t timeout)
+{
+	if (conn_device_a){
+		if (notify_count_a == 0){
+			no_notify_secs_a += interval;
+			if (no_notify_secs_a > timeout){
+				ESP_LOGI(GATTC_TAG, "device a timeout disconnect");
+				conn_device_a = false;
+				get_service_a = false;
+				if (CONN_DEVICES == 0) {
+				    start = false;
+				    start_time = 0;
+				    current_time = 0;
+				    notify_len = 0;
+		        }
+				start_scan();
+			}
+		} else {
+			no_notify_secs_a = 0;
+		}
+	}
+	if (conn_device_b){
+		if (notify_count_b == 0){
+			no_notify_secs_b += interval;
+			if (no_notify_secs_b > timeout){
+				ESP_LOGI(GATTC_TAG, "device b timeout disconnect");
+				conn_device_b = false;
+				get_service_b = false;
+				if (CONN_DEVICES == 0) {
+				    start = false;
+				    start_time = 0;
+				    current_time = 0;
+				    notify_len = 0;
+		        }
+				start_scan();
+			}
+		} else {
+			no_notify_secs_b = 0;
+		}
+	}
+	if (conn_device_c){
+		if (notify_count_c == 0){
+			no_notify_secs_c += interval;
+			if (no_notify_secs_c > timeout){
+				ESP_LOGI(GATTC_TAG, "device c timeout disconnect");
+				conn_device_c = false;
+				get_service_c = false;
+				if (CONN_DEVICES == 0) {
+					start = false;
+					start_time = 0;
+					current_time = 0;
+				    notify_len = 0;
+		        }
+				start_scan();
+			}
+		} else {
+			no_notify_secs_c = 0;
+		}
+	}
+	if (conn_device_d){
+		if (notify_count_d == 0){
+			no_notify_secs_d += interval;
+			if (no_notify_secs_d > timeout){
+				ESP_LOGI(GATTC_TAG, "device d timeout disconnect");
+				conn_device_d = false;
+				get_service_d = false;
+				if (CONN_DEVICES == 0) {
+				    start = false;
+				    start_time = 0;
+				    current_time = 0;
+				    notify_len = 0;
+			    }
+				start_scan();
+			}
+		} else {
+			no_notify_secs_d = 0;
+		}
+	}
+	notify_count_a = 0;
+	notify_count_b = 0;
+	notify_count_c = 0;
+	notify_count_d = 0;
 }
 
 static void gattc_profile_a_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
@@ -381,6 +487,7 @@ static void gattc_profile_a_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
         } else {
             ESP_LOGE(GATTC_TAG, "ESP_GATTC_NOTIFY_EVT, receive indicate value:");
         }
+        notify_count_a++;
         if (start == false) {
             start_time = esp_timer_get_time();
             start = true;
@@ -607,6 +714,7 @@ static void gattc_profile_b_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
         } else {
             ESP_LOGE(GATTC_TAG, "ESP_GATTC_NOTIFY_EVT, receive indicate value:");
         }
+        notify_count_b++;
         if (start == false) {
             start_time = esp_timer_get_time();
             start = true;
@@ -830,6 +938,7 @@ static void gattc_profile_c_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
         } else {
             ESP_LOGE(GATTC_TAG, "ESP_GATTC_NOTIFY_EVT, receive indicate value:");
         }
+        notify_count_c++;
         if (start == false) {
             start_time = esp_timer_get_time();
             start = true;
@@ -1057,6 +1166,7 @@ static void gattc_profile_d_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
         } else {
             ESP_LOGE(GATTC_TAG, "ESP_GATTC_NOTIFY_EVT, receive indicate value:");
         }
+        notify_count_d++;
         if (start == false) {
             start_time = esp_timer_get_time();
             start = true;
@@ -1315,10 +1425,12 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
 
 static void throughput_client_task(void *param)
 {
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+	const TickType_t delay = 2000 / portTICK_PERIOD_MS;
+	vTaskDelay(delay);
 
     while(1) {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(delay);
+        check_connection(delay / 100, NOTIFY_TIMEOUT);
         if(conn_device_a || conn_device_b || conn_device_c || conn_device_d){
             uint32_t bit_rate = 0;
             if (start_time) {
