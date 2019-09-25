@@ -157,24 +157,22 @@ esp_err_t bno055_read_data(i2c_port_t i2c_num, bno055_reg_t start_reg, uint8_t *
 
 // Public functions
 
-esp_err_t bno055_set_default_conf(bno_i2c_config_t * p_bno_conf){
+esp_err_t bno055_set_default_conf(bno055_i2c_config_t * p_bno_conf){
 
     p_bno_conf->i2c_address = BNO055_ADDRESS_A;          // BNO055_ADDRESS_A or BNO055_ADDRESS_B 
-    p_bno_conf->sda_io_num = 18;        // GPIO number for I2C sda signal 25
+    p_bno_conf->sda_io_num = 21;        // GPIO number for I2C sda signal 25
     p_bno_conf->sda_pullup_en = GPIO_PULLUP_DISABLE;  // Internal GPIO pull mode for I2C sda signal
-    p_bno_conf->scl_io_num = 19;        // GPIO number for I2C scl signal 26 
+    p_bno_conf->scl_io_num = 22;        // GPIO number for I2C scl signal 26
     p_bno_conf->scl_pullup_en = GPIO_PULLUP_DISABLE;  // Internal GPIO pull mode for I2C scl signal
     p_bno_conf->clk_speed = 400000;     // I2C clock frequency for master mode, (no higher than 1MHz for now) 
     p_bno_conf->timeout = 16300;            // in 80 MHz ticks, should be < 0x3FFF 
-    
-    
 
     return ESP_OK;   
 }
 
 
 
-esp_err_t bno055_open(i2c_port_t i2c_num, bno_i2c_config_t * p_bno_conf )
+esp_err_t bno055_open(i2c_port_t i2c_num, bno055_i2c_config_t * p_bno_conf )
 {
     if(i2c_num >= I2C_NUM_MAX) return ESP_ERR_INVALID_ARG;
     

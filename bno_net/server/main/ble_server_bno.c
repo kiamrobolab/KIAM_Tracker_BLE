@@ -34,6 +34,8 @@
 
 #define GATTS_TAG "GATTS_BNO"
 
+i2c_port_t i2c_num = 0;
+
 #define GATTS_NOTIFY_LEN    490
 static SemaphoreHandle_t gatts_semaphore;
 static bool can_send_notify = false;
@@ -529,6 +531,8 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 void bno_server_task(void *param)
 {
     vTaskDelay(2000 / portTICK_PERIOD_MS);
+    bno055_quaternion_t quat;
+    esp_err_t err;
 
     uint8_t sum = check_sum(indicate_data, sizeof(indicate_data) - 1);
     // Added the check sum in the last data value.
@@ -566,8 +570,7 @@ void app_main()
     }
     ESP_ERROR_CHECK( ret );
 
-    bno_i2c_config_t bno_conf;
-    i2c_port_t i2c_num = 0;
+    bno055_i2c_config_t bno_conf;
 
     esp_err_t err;
     err = bno055_set_default_conf( &bno_conf);
