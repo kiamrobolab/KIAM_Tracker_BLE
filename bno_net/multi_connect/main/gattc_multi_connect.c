@@ -235,6 +235,13 @@ static void start_scan(void)
     }
 }
 
+/**
+ * @brief           check if notifications were received
+ *
+ * @interval[in]    interval since last check
+ * @timeout[in]     timeout duration
+ */
+
 static void check_connection(uint16_t interval, uint16_t timeout)
 {
 	if (conn_device_a){
@@ -1423,23 +1430,28 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
     } while (0);
 }
 
-static void throughput_client_task(void *param)
+static void mtu_client_task(void *param)
 {
 	const TickType_t delay = 2000 / portTICK_PERIOD_MS;
 	vTaskDelay(delay);
 
     while(1) {
+    	//TODO: change delay to broadcast delay
         vTaskDelay(delay);
+        //TODO: check connection every 0.5s (custom interval)
         check_connection(delay / 100, NOTIFY_TIMEOUT);
         if(conn_device_a || conn_device_b || conn_device_c || conn_device_d){
-            uint32_t bit_rate = 0;
-            if (start_time) {
+            //uint32_t bit_rate = 0;
+            if (start) {
                 current_time = esp_timer_get_time();
-                bit_rate = notify_len * SECOND_TO_USECOND / (current_time - start_time);
-                ESP_LOGI(GATTC_TAG, "Notify for %d connected devices: Bit rate = %d Btye/s, = %d bit/s, time = %ds", 
-                        CONN_DEVICES, bit_rate, bit_rate<<3, (int)((current_time - start_time) / SECOND_TO_USECOND));
+                //TODO: send broadcast
+                //bit_rate = notify_len * SECOND_TO_USECOND / (current_time - start_time);
+                ESP_LOGI(GATTC_TAG, "Broadcast for %d connected devices at %d",
+                        CONN_DEVICES, (int)(current_time / SECOND_TO_USECOND));
             } else {
-                ESP_LOGI(GATTC_TAG, "Notify Bit rate = 0 Btye/s, = 0 bit/s");
+            	//TODO: add cond counter to log every custom interval
+            	if
+                ESP_LOGI(GATTC_TAG, "No devices started to notify");
             }
         }
     }
@@ -1524,6 +1536,6 @@ void app_main()
         ESP_LOGE(GATTC_TAG, "set local  MTU failed, error code = %x", ret);
     }
 
-    xTaskCreate(&throughput_client_task, "throughput_client_task", 4096, NULL, 10, NULL);
+    xTaskCreate(&mtu_client_task, "mtu_client_task", 4096, NULL, 10, NULL);
 }
 
