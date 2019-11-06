@@ -1279,6 +1279,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 break;
             }
             /*
+            // MATCHING DEVICES BY NAME
             if (adv_name != NULL) {
 
                 if (strlen(remote_device_name[0]) == adv_name_len && strncmp((char *)adv_name, remote_device_name[0], adv_name_len) == 0) {
@@ -1313,6 +1314,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 }
 
             }*/
+            //MATCHING DEVICES BY ADDRESS
             hex_array_to_string(scan_result->scan_rst.bda, MAC_ADDRESS_LENGTH, bda);
             if (strncmp(bda, remote_device_address[0], address_name_len) == 0) {
                 if (conn_device_a == false) {
