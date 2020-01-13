@@ -165,14 +165,14 @@ static void udp_client_task(void *pvParameters)
 
         while (1) {
 
-   			time_mks = esp_timer_get_time();
+   			time_mks = esp_log_timestamp();
    			err = bno055_get_quaternion(I2C_PORT, &quat);
-   			time_mks_after = esp_timer_get_time();
+   			time_mks_after = esp_log_timestamp();
    			if( err != ESP_OK ) {
    				printf("bno055_get_quaternion() returned error: %02x \n", err);
    				exit(2);
    			}
-   			time_bno = time_bno + (float)(time_mks_after - time_mks)/1000000;
+   			time_bno = time_bno + (float)(time_mks_after - time_mks)/1000;
    			//n_sent++;
 
    			//sprintf(payload, "%16lld\t%10d\t",time_mks, time_bno);
@@ -184,7 +184,7 @@ static void udp_client_task(void *pvParameters)
    					#acc,%.3f,%.3f,%.3f\
    					#grav,%.3f,%.3f,%.3f\
                     #mag,%.3f,%.3f,%.3f",
-   					time_bno,
+   					(float)time_mks_after/1000,
    					0., 0., 0.,
 					quat.w, quat.x, quat.y, quat.z,
 					0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
