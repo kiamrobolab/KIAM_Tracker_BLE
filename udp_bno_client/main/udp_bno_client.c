@@ -131,10 +131,13 @@ static void udp_client_task(void *pvParameters)
     int addr_family;
     int ip_protocol;
     esp_err_t err;
-    int64_t time_mks, time_mks_after;
-    float time_bno = 0;
+    uint32_t time_mks, time_mks_after;
+    float time_check_sum = 0;
     int n_sent = 0;
+    int n_check_sum = 0;
     bno055_quaternion_t quat;
+    const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
+    TickType_t xLastWakeTime;
 
     while (1) {
 
@@ -163,19 +166,20 @@ static void udp_client_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Socket created");
 
+        time_mks = esp_log_timestamp();
+        xLastWakeTime = xTaskGetTickCount();
         while (1) {
+        	vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-   			time_mks = esp_log_timestamp();
    			err = bno055_get_quaternion(I2C_PORT, &quat);
-   			time_mks_after = esp_log_timestamp();
    			if( err != ESP_OK ) {
    				printf("bno055_get_quaternion() returned error: %02x \n", err);
    				exit(2);
    			}
-   			time_bno = time_bno + (float)(time_mks_after - time_mks)/1000;
-   			//n_sent++;
 
-   			//sprintf(payload, "%16lld\t%10d\t",time_mks, time_bno);
+   			time_mks_after = esp_log_timestamp();
+   			time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000;
+
    			sprintf(payload, "%.5f\
    					#linacc,%.3f,%.3f,%.3f\
    					#rotvec,%.3f,%.3f,%.3f,%.3f\
@@ -192,6 +196,7 @@ static void udp_client_task(void *pvParameters)
 					0., 0., 0.,
 					0., 0., 0.,
 					0., 0., 0.);
+   			time_mks = time_mks_after;
 
    			ESP_LOGI(TAG, "%s", payload);
 
@@ -200,24 +205,23 @@ static void udp_client_task(void *pvParameters)
                 ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
                 break;
             }
+            ESP_LOGI(TAG, "%u %u", time_mks_after, esp_log_timestamp());
+            n_sent++;
 
-            /*
-            if (time_bno > 1)
+            if (time_check_sum > 1)
             {
-            	sprintf(payload, "#%d %f", n_sent, time_bno);
+            	sprintf(payload, "#%d %f Checksum#%d", n_sent, time_check_sum, n_check_sum);
+            	ESP_LOGI(TAG, "Check sum sent: %s", payload);
             	err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
             	if (err < 0)
             	{
             	    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
             	    break;
             	}
-            	time_bno -= 1;
+            	time_check_sum = 0;
             	n_sent = 0;
+            	n_check_sum++;
             }
-            */
-            //ESP_LOGI(TAG, "Message sent:\n %s", payload);
-
-            vTaskDelay(10 / portTICK_PERIOD_MS);
         }
 
         if (sock != -1) {
