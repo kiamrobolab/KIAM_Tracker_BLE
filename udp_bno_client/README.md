@@ -1,46 +1,11 @@
 
-# UDP Client example
+# UDP Client with BNO055
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
-
-The application creates UDP socket and sends message to the predefined port and IP address. After the server's reply, the application prints received reply as ASCII text, waits for 2 seconds and sends another message.
-
-## How to use example
-
-In order to create UDP server that communicates with UDP Client example, choose one of the following options.
-
-There are many host-side tools which can be used to interact with the UDP/TCP server/client. 
-One command line tool is [netcat](http://netcat.sourceforge.net) which can send and receive many kinds of packets. 
-Note: please replace `192.168.0.167 3333` with desired IPV4/IPV6 address (displayed in monitor console) and port number in the following commands.
-
-In addition to those tools, simple Python scripts can be found under sockets/scripts directory. Every script is designed to interact with one of the examples.
-
-### Send UDP packet via netcat
-```
-echo "Hello from PC" | nc -w1 -u 192.168.0.167 3333
-```
-
-### Receive UDP packet via netcat
-```
-echo "Hello from PC" | nc -w1 -u 192.168.0.167 3333
-```
-
-### UDP server using netcat
-```
-nc -u -l 192.168.0.167 -p 3333
-```
-
-### Python scripts
-Script udpserver.py contains configuration for port number and IP version (IPv4 or IPv6) that has to be altered to match the values used by the application. Example:
-
-```
-IP_VERSION = 'IPv4'
-PORT = 3333;
-```
+The application creates UDP socket, gets data from BNO055 sensor from predefined I2C port and sends message to the predefined port and IP address in frequency of 100Hz. 
 
 ## Hardware Required
 
-This example can be run on any commonly available ESP32 development board.
+This example can be run on any commonly available ESP32 development board with BNO055 sensor attached to I2C port.
 
 ## Configure the project
 
@@ -66,6 +31,8 @@ Set following parameters under Example Configuration Options:
 
 * Set `Port` number that represents remote port the example will send data and receive data from.
 
+* Set `I2C Port` number (`Port 0` or `Port 1`).
+
 ## Build and Flash
 
 Build the project and flash it to the board, then run monitor tool to view serial output:
@@ -76,7 +43,11 @@ make -j4 flash monitor
 
 (To exit the serial monitor, type ``Ctrl-]``.)
 
-See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+## Data description
+
+BNO055 sensor outputs its frame represented by quaternions (stored in `bno055_quaternion_t` structure). For more details see www.github.com/rebrik/esp32-bno055.
+
+Data is read each 10ms by default and sent as a string in UDP packet. For more details about UDP see https://erg.abdn.ac.uk/users/gorry/course/inet-pages/udp.html 
 
 
 ## Troubleshooting
