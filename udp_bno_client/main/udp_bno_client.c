@@ -39,7 +39,8 @@
 #define HOST_IP_ADDR CONFIG_EXAMPLE_IPV6_ADDR
 #endif
 
-#define PORT CONFIG_EXAMPLE_PORT
+#define SEND_PORT CONFIG_SEND_PORT
+#define RECEIVE_PORT CONFIG_RECEIVE_PORT
 
 #ifdef CONFIG_EXAMPLE_I2C_PORT_0
 #define I2C_PORT I2C_NUMBER_0
@@ -55,6 +56,8 @@ const int IPV6_GOTIP_BIT = BIT1;
 
 static const char *TAG = "example";
 static char payload[1024];
+bool start_flag = false;
+//SemaphoreHandle_t udp_mux = NULL;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -126,7 +129,6 @@ static void wait_for_ip()
 
 static void udp_client_task(void *pvParameters)
 {
-    //char rx_buffer[128];
     char addr_str[128];
     int addr_family;
     int ip_protocol;
@@ -141,19 +143,127 @@ static void udp_client_task(void *pvParameters)
 
     while (1) {
 
+    	if (start_flag) {
+#ifdef CONFIG_EXAMPLE_IPV4
+            struct sockaddr_in destAddr;
+            destAddr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+            destAddr.sin_family = AF_INET;
+            destAddr.sin_port = htons(SEND_PORT);
+            addr_family = AF_INET;
+            ip_protocol = IPPROTO_IP;
+            inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
+#else // IPV6
+            struct sockaddr_in6 destAddr;
+            inet6_aton(HOST_IP_ADDR, &destAddr.sin6_addr);
+            destAddr.sin6_family = AF_INET6;
+            destAddr.sin6_port = htons(SEND_PORT);
+            addr_family = AF_INET6;
+            ip_protocol = IPPROTO_IPV6;
+            inet6_ntoa_r(destAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+#endif
+
+            int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+            if (sock < 0) {
+                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+                break;
+            }
+            ESP_LOGI(TAG, "Socket created");
+
+            time_mks = esp_log_timestamp();
+            xLastWakeTime = xTaskGetTickCount();
+            while (1) {
+        	    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+   			    err = bno055_get_quaternion(I2C_PORT, &quat);
+   			    if( err != ESP_OK ) {
+   				    printf("bno055_get_quaternion() returned error: %02x \n", err);
+   				    exit(2);
+   			    }
+
+   			    time_mks_after = esp_log_timestamp();
+
+
+   			    sprintf(payload, "%.5f\
+   					#linacc,%d,%d,%d\
+   					#rotvec,%f,%f,%f,%f\
+   					#rotmat,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\
+   					#gyr,%d,%d,%d\
+   					#acc,%d,%d,%d\
+   					#grav,%d,%d,%d\
+                    #mag,%d,%d,%d",
+   					(float)time_mks_after/1000,
+   					0, 0, 0,
+					quat.w, quat.x, quat.y, quat.z,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0,
+					0, 0, 0,
+					0, 0, 0,
+					0, 0, 0);
+   			    //ESP_LOGI(TAG, "Reading: %u %u", time_mks_after, esp_log_timestamp());
+
+   			    //ESP_LOGI(TAG, "%s", payload);
+
+   			    vTaskDelay(1);
+                err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
+                if (err < 0) {
+                    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                    break;
+                }
+                //ESP_LOGI(TAG, "Sending: %u %u", time_mks_after, esp_log_timestamp());
+                n_sent++;
+
+                time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000;
+                time_mks = time_mks_after;
+                if (time_check_sum > 1)
+                {
+            	    sprintf(payload, "#%d %f Checksum#%d", n_sent, time_check_sum, n_check_sum);
+            	    ESP_LOGI(TAG, "Check sum sent: %s", payload);
+            	    err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
+            	    if (err < 0)
+            	    {
+            	        ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+            	        break;
+            	    }
+            	    time_check_sum = 0;
+            	    n_sent = 0;
+            	    n_check_sum++;
+                }
+            }
+
+            if (sock != -1) {
+                ESP_LOGE(TAG, "Shutting down socket and restarting...");
+                shutdown(sock, 0);
+                close(sock);
+            }
+    	}
+    }
+    vTaskDelete(NULL);
+}
+
+static void udp_server_task(void *pvParameters)
+{
+    char rx_buffer[128];
+    char addr_str[128];
+    int addr_family;
+    int ip_protocol;
+    struct sockaddr_in6 sourceAddr; // Large enough for both IPv4 or IPv6
+    socklen_t socklen = sizeof(sourceAddr);
+
+    while (1) {
+
 #ifdef CONFIG_EXAMPLE_IPV4
         struct sockaddr_in destAddr;
-        destAddr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+        destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
         destAddr.sin_family = AF_INET;
-        destAddr.sin_port = htons(PORT);
+        destAddr.sin_port = htons(RECEIVE_PORT);
         addr_family = AF_INET;
         ip_protocol = IPPROTO_IP;
         inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
 #else // IPV6
         struct sockaddr_in6 destAddr;
-        inet6_aton(HOST_IP_ADDR, &destAddr.sin6_addr);
+        bzero(&destAddr.sin6_addr.un, sizeof(destAddr.sin6_addr.un));
         destAddr.sin6_family = AF_INET6;
-        destAddr.sin6_port = htons(PORT);
+        destAddr.sin6_port = htons(RECEIVE_PORT);
         addr_family = AF_INET6;
         ip_protocol = IPPROTO_IPV6;
         inet6_ntoa_r(destAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
@@ -166,61 +276,60 @@ static void udp_client_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Socket created");
 
-        time_mks = esp_log_timestamp();
-        xLastWakeTime = xTaskGetTickCount();
+        int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
+        if (err < 0) {
+            ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+        }
+        ESP_LOGI(TAG, "Socket binded");
+
         while (1) {
-        	vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-   			err = bno055_get_quaternion(I2C_PORT, &quat);
-   			if( err != ESP_OK ) {
-   				printf("bno055_get_quaternion() returned error: %02x \n", err);
-   				exit(2);
-   			}
+            ESP_LOGI(TAG, "Waiting for data");
+            int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&sourceAddr, &socklen);
 
-   			time_mks_after = esp_log_timestamp();
-   			time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000;
-
-   			sprintf(payload, "%.5f\
-   					#linacc,%.3f,%.3f,%.3f\
-   					#rotvec,%.3f,%.3f,%.3f,%.3f\
-   					#rotmat,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\
-   					#gyr,%.3f,%.3f,%.3f\
-   					#acc,%.3f,%.3f,%.3f\
-   					#grav,%.3f,%.3f,%.3f\
-                    #mag,%.3f,%.3f,%.3f",
-   					(float)time_mks_after/1000,
-   					0., 0., 0.,
-					quat.w, quat.x, quat.y, quat.z,
-					0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-					0., 0., 0.,
-					0., 0., 0.,
-					0., 0., 0.,
-					0., 0., 0.);
-   			time_mks = time_mks_after;
-
-   			ESP_LOGI(TAG, "%s", payload);
-
-            err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
-            if (err < 0) {
-                ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+            // Error occured during receiving
+            if (len < 0) {
+                ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
                 break;
             }
-            ESP_LOGI(TAG, "%u %u", time_mks_after, esp_log_timestamp());
-            n_sent++;
+            // Data received
+            else {
+                // Get the sender's ip address as string
+                if (sourceAddr.sin6_family == PF_INET) {
+                    inet_ntoa_r(((struct sockaddr_in *)&sourceAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                } else if (sourceAddr.sin6_family == PF_INET6) {
+                    inet6_ntoa_r(sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+                }
 
-            if (time_check_sum > 1)
-            {
-            	sprintf(payload, "#%d %f Checksum#%d", n_sent, time_check_sum, n_check_sum);
-            	ESP_LOGI(TAG, "Check sum sent: %s", payload);
-            	err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
-            	if (err < 0)
-            	{
-            	    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
-            	    break;
-            	}
-            	time_check_sum = 0;
-            	n_sent = 0;
-            	n_check_sum++;
+                if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
+
+                     rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+                     //ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+                     ESP_LOGI(TAG, "%s", rx_buffer);
+
+                     sourceAddr.sin6_port = htons(SEND_PORT);
+                     int err = sendto(sock, rx_buffer, len, 0, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
+                     if (err < 0) {
+                         ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                         break;
+                     }
+
+                     while(1) {
+                    	 len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&sourceAddr, &socklen);
+
+                    	 if (len < 0) {
+                    		 ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+                    		 break;
+                    	 }
+                    	 else {
+                    		 rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+                    		 //ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+                    		 ESP_LOGI(TAG, "%s", rx_buffer);
+                    		 start_flag = true;
+                    		 vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    	 }
+                     }
+                }
             }
         }
 
@@ -240,8 +349,6 @@ void app_main()
     wait_for_ip();
 
     bno055_config_t bno_conf;
-
-    //    esp_log_level_set("*", ESP_LOG_INFO);
 
     esp_err_t err;
     err = bno055_set_default_conf( &bno_conf);
@@ -266,6 +373,8 @@ void app_main()
 
     TaskHandle_t xHandle = NULL;
     // create task on the APP CPU (CPU_1)
+    //TODO: refactor to initiate global destAddr
+    xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
     xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, &xHandle);
   // err = xTaskCreatePinnedToCore(quat_task,   // task function
   //  		                      "quat_task",    // task name for debugging

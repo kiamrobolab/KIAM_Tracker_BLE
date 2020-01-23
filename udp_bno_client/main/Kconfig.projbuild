@@ -40,12 +40,19 @@ config EXAMPLE_IPV6_ADDR
     help
        IPV6 address to which the client example will send data.
 
-config EXAMPLE_PORT
-    int "Port"
+config SEND_PORT
+    int "Remote port"
     range 0 65535
     default 3333
     help
         The remote port to which the client example will send data.
+        
+ config RECEIVE_PORT
+    int "Device port"
+    range 0 65535
+    default 3333
+    help
+        The device port from which the client example will receive data.
 
 choice EXAMPLE_I2C_PORT
     prompt "I2C Port"
