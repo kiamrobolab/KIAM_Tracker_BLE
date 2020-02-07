@@ -56,8 +56,7 @@ const int IPV6_GOTIP_BIT = BIT1;
 
 static const char *TAG = "example";
 static char payload[1024];
-static bool start_flag = true;
-//SemaphoreHandle_t udp_mux = NULL;
+static bool start_flag = false;
 
 uint32_t offset, delay;
 
@@ -214,7 +213,7 @@ static void udp_client_task(void *pvParameters)
 					0, 0, 0);
    			    //ESP_LOGI(TAG, "Reading: %u %u", time_mks_after, esp_log_timestamp());
 
-   			    ESP_LOGI(TAG, "%s", payload);
+   			    //ESP_LOGI(TAG, "%s", payload);
 
    			    //vTaskDelay(1);
                 err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
@@ -255,8 +254,8 @@ static void udp_client_task(void *pvParameters)
 
 static void udp_server_task(void *pvParameters)
 {
-    char rx_buffer[1024];
-    char *token1, *token2, *token3;
+    char rx_buffer[1024], parse_buffer[1024];
+    char *tokens;
     char addr_str[128];
     int addr_family;
     int ip_protocol;
@@ -315,7 +314,7 @@ static void udp_server_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Socket1 created");*/
 
-        int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
+        int err = bind(sock, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
         if (err < 0) {
             ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
         }
@@ -323,14 +322,14 @@ static void udp_server_task(void *pvParameters)
 
         while (1) {
 
-        	ESP_LOGI(TAG, "Sending data");
+        	/*ESP_LOGI(TAG, "Sending data");
         	t1_sent = esp_log_timestamp();
         	sprintf(rx_buffer, "%d", t1_sent);
-        	int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&destAddr, sizeof(buf_sourceAddr));
+        	int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
         	if (err < 0) {
         	    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
         	    break;
-        	}
+        	}*/
             ESP_LOGI(TAG, "Waiting for data");
             int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
             t1_received = esp_log_timestamp();
@@ -352,16 +351,18 @@ static void udp_server_task(void *pvParameters)
 
                     rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
                     //ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
-                    ESP_LOGI(TAG, "%s", rx_buffer);
-                    token1 = strtok(rx_buffer, ",");
-                    t1_sent = atoi(token1);
+                    //ESP_LOGI(TAG, "%s", rx_buffer);
+                    strcpy(parse_buffer, rx_buffer);
+                    tokens = strtok(parse_buffer, ",");
+                    t1_sent = atoi(tokens);
 
                     vTaskDelay(10 / portTICK_PERIOD_MS);
 
-                    buf_sourceAddr.sin6_port = htons(5554);
                     t2_sent = esp_log_timestamp();
+                    //ESP_LOGI(TAG, "%s", rx_buffer);
                     sprintf(rx_buffer, "%s,%d,%d", rx_buffer, t1_received, t2_sent);
-                    for (int j=0; j < 10; j++){
+                    //ESP_LOGI(TAG, "%s", rx_buffer);
+                    for (int j=0; j < 1; j++){
                         int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
                         if (err < 0) {
                             ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
@@ -383,12 +384,10 @@ static void udp_server_task(void *pvParameters)
                     		rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
                     		//ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
                     		ESP_LOGI(TAG, "%s", rx_buffer);
-                    		token2 = strtok(token1, ",");
-                    		token2 = strtok(NULL, ",");
-                    		token2 = strtok(NULL, ",");
-                    		t2_received = atoi(token2);
-                    		token3 = strtok(NULL, ",");
-                    		t3_sent = atoi(token3);
+                    		strcpy(parse_buffer, rx_buffer);
+                    		tokens = strtok(parse_buffer, ",");
+                    		t2_received = atoi(tokens + 4);
+                    		t3_sent = atoi(tokens + 5);
                     		offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
                     		start_flag = true;
                     	    vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -438,7 +437,7 @@ void app_main()
 
     TaskHandle_t xHandle = NULL;
     // TODO: create task on the WIFI CPU (CPU_1)
-    //xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
+    xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
     xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, &xHandle);
   // err = xTaskCreatePinnedToCore(quat_task,   // task function
   //  		                      "quat_task",    // task name for debugging
