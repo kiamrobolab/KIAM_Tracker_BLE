@@ -58,7 +58,7 @@ static const char *TAG = "example";
 static char payload[1024];
 static bool start_flag = false;
 
-uint32_t offset, delay;
+static uint32_t offset, delay;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -192,7 +192,7 @@ static void udp_client_task(void *pvParameters)
    			        exit(2);
    			    }
 
-   			    time_mks_after = esp_log_timestamp();
+   			    time_mks_after = esp_timer_get_time();
 
 
    			    sprintf(payload, "%.5f"
@@ -211,20 +211,16 @@ static void udp_client_task(void *pvParameters)
 					acc.x, acc.y, acc.z,
 					grav.x, grav.x, grav.z,
 					0, 0, 0);
-   			    //ESP_LOGI(TAG, "Reading: %u %u", time_mks_after, esp_log_timestamp());
 
-   			    //ESP_LOGI(TAG, "%s", payload);
-
-   			    //vTaskDelay(1);
                 err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
                     break;
                 }
-                //ESP_LOGI(TAG, "Sending: %u %u", time_mks_after, esp_log_timestamp());
+
                 n_sent++;
 
-                time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000;
+                time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000000;
                 time_mks = time_mks_after;
                 if (time_check_sum > 1)
                 {
@@ -266,23 +262,6 @@ static void udp_server_task(void *pvParameters)
     while (1) {
 
 #ifdef CONFIG_EXAMPLE_IPV4
-            struct sockaddr_in destAddr;
-            destAddr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
-            destAddr.sin_family = AF_INET;
-            destAddr.sin_port = htons(RECEIVE_PORT);
-            addr_family = AF_INET;
-            ip_protocol = IPPROTO_IP;
-            inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
-#else // IPV6
-            struct sockaddr_in6 destAddr;
-            inet6_aton(HOST_IP_ADDR, &destAddr.sin6_addr);
-            destAddr.sin6_family = AF_INET6;
-            destAddr.sin6_port = htons(RECEIVE_PORT);
-            addr_family = AF_INET6;
-            ip_protocol = IPPROTO_IPV6;
-            inet6_ntoa_r(destAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
-#endif
-#ifdef CONFIG_EXAMPLE_IPV4
         struct sockaddr_in sourceAddr;
         sourceAddr.sin_addr.s_addr = htonl(INADDR_ANY);
         sourceAddr.sin_family = AF_INET;
@@ -307,12 +286,6 @@ static void udp_server_task(void *pvParameters)
             break;
         }
         ESP_LOGI(TAG, "Socket created");
-        /*int sock1 = socket(addr_family, SOCK_DGRAM, ip_protocol);
-        if (sock1 < 0) {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket1 created");*/
 
         int err = bind(sock, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
         if (err < 0) {
@@ -322,17 +295,9 @@ static void udp_server_task(void *pvParameters)
 
         while (1) {
 
-        	/*ESP_LOGI(TAG, "Sending data");
-        	t1_sent = esp_log_timestamp();
-        	sprintf(rx_buffer, "%d", t1_sent);
-        	int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
-        	if (err < 0) {
-        	    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
-        	    break;
-        	}*/
             ESP_LOGI(TAG, "Waiting for data");
             int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
-            t1_received = esp_log_timestamp();
+            t1_received = esp_timer_get_time();
             // Error occured during receiving
             if (len < 0) {
                 ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
@@ -350,31 +315,26 @@ static void udp_server_task(void *pvParameters)
                 if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
 
                     rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
-                    //ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
-                    //ESP_LOGI(TAG, "%s", rx_buffer);
+
                     strcpy(parse_buffer, rx_buffer);
                     tokens = strtok(parse_buffer, ",");
                     t1_sent = atoi(tokens);
 
                     vTaskDelay(10 / portTICK_PERIOD_MS);
 
-                    t2_sent = esp_log_timestamp();
-                    //ESP_LOGI(TAG, "%s", rx_buffer);
+                    t2_sent = esp_timer_get_time();
                     sprintf(rx_buffer, "%s,%d,%d", rx_buffer, t1_received, t2_sent);
-                    //ESP_LOGI(TAG, "%s", rx_buffer);
-                    for (int j=0; j < 1; j++){
-                        int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
-                        if (err < 0) {
-                            ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
-                            break;
-                        }
-                        vTaskDelay(10 / portTICK_PERIOD_MS);
+
+                    int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
+                    if (err < 0) {
+                        ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                        break;
                     }
 
                     while(1) {
-                    	ESP_LOGI(TAG, "Sent message to %s:%d %d", addr_str, buf_sourceAddr.sin6_port, htons(RECEIVE_PORT));
+                    	//ESP_LOGI(TAG, "Sent message to %s:%d %d", addr_str, buf_sourceAddr.sin6_port, htons(RECEIVE_PORT));
                     	len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
-                    	t3_received = esp_log_timestamp();
+                    	t3_received = esp_timer_get_time();
 
                     	if (len < 0) {
                     		ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
@@ -383,14 +343,15 @@ static void udp_server_task(void *pvParameters)
                     	else {
                     		rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
                     		//ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
-                    		ESP_LOGI(TAG, "%s", rx_buffer);
+
                     		strcpy(parse_buffer, rx_buffer);
                     		tokens = strtok(parse_buffer, ",");
                     		t2_received = atoi(tokens + 4);
                     		t3_sent = atoi(tokens + 5);
+
                     		offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
                     		start_flag = true;
-                    	    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    	    vTaskDelay(10000 / portTICK_PERIOD_MS);
                     	}
                     }
                 }
@@ -439,11 +400,5 @@ void app_main()
     // TODO: create task on the WIFI CPU (CPU_1)
     xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
     xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, &xHandle);
-  // err = xTaskCreatePinnedToCore(quat_task,   // task function
-  //  		                      "quat_task",    // task name for debugging
-  //          					   2048,          // stack size bytes
-  //  		        			   &i2c_num,      // pointer to params to pass
-  //  							   10,            // task priority. configMAX_PRIORITIES == 25, so 24 is the highest. 0 is idle
-  //  							   &xHandle,      // returned task handle
-  //  							   1);            // CPU to use 1 means APP_CPU
+
 }
