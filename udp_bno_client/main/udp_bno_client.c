@@ -56,7 +56,7 @@ const int IPV6_GOTIP_BIT = BIT1;
 
 static const char *TAG = "example";
 static char payload[1024];
-bool start_flag = false;
+static bool start_flag = true;
 //SemaphoreHandle_t udp_mux = NULL;
 
 uint32_t offset, delay;
@@ -140,6 +140,7 @@ static void udp_client_task(void *pvParameters)
     int n_sent = 0;
     int n_check_sum = 0;
     bno055_quaternion_t quat;
+    bno055_vec3_t acc, grav;
     const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
     TickType_t xLastWakeTime;
 
@@ -181,29 +182,39 @@ static void udp_client_task(void *pvParameters)
    				    printf("bno055_get_quaternion() returned error: %02x \n", err);
    				    exit(2);
    			    }
+   			    err = bno055_get_lin_accel(I2C_PORT, &acc);
+   			    if( err != ESP_OK ) {
+   			        printf("bno055_get_lin_accel() returned error: %02x \n", err);
+   			        exit(2);
+   			    }
+   			    err = bno055_get_gravity(I2C_PORT, &grav);
+   			    if( err != ESP_OK ) {
+   			        printf("bno055_get_gravity() returned error: %02x \n", err);
+   			        exit(2);
+   			    }
 
    			    time_mks_after = esp_log_timestamp();
 
 
    			    sprintf(payload, "%.5f"
    					"#linacc,%d,%d,%d"
-   					"#rotvec,%f,%f,%f,%f"
+   					"#rotvec,%.5f,%.5f,%.5f,%.5f"
    					"#rotmat,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d"
    					"#gyr,%d,%d,%d"
-   					"#acc,%d,%d,%d"
-   					"#grav,%d,%d,%d"
+   					"#acc,%.5f,%.5f,%.5f"
+   					"#grav,%.5f,%.5f,%.5f"
                     "#mag,%d,%d,%d",
    					(float)time_mks_after/1000,
    					0, 0, 0,
 					quat.w, quat.x, quat.y, quat.z,
 					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 					0, 0, 0,
-					0, 0, 0,
-					0, 0, 0,
+					acc.x, acc.y, acc.z,
+					grav.x, grav.x, grav.z,
 					0, 0, 0);
    			    //ESP_LOGI(TAG, "Reading: %u %u", time_mks_after, esp_log_timestamp());
 
-   			    //ESP_LOGI(TAG, "%s", payload);
+   			    ESP_LOGI(TAG, "%s", payload);
 
    			    //vTaskDelay(1);
                 err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
@@ -255,7 +266,23 @@ static void udp_server_task(void *pvParameters)
 
     while (1) {
 
-    	/*
+#ifdef CONFIG_EXAMPLE_IPV4
+            struct sockaddr_in destAddr;
+            destAddr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+            destAddr.sin_family = AF_INET;
+            destAddr.sin_port = htons(RECEIVE_PORT);
+            addr_family = AF_INET;
+            ip_protocol = IPPROTO_IP;
+            inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
+#else // IPV6
+            struct sockaddr_in6 destAddr;
+            inet6_aton(HOST_IP_ADDR, &destAddr.sin6_addr);
+            destAddr.sin6_family = AF_INET6;
+            destAddr.sin6_port = htons(RECEIVE_PORT);
+            addr_family = AF_INET6;
+            ip_protocol = IPPROTO_IPV6;
+            inet6_ntoa_r(destAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+#endif
 #ifdef CONFIG_EXAMPLE_IPV4
         struct sockaddr_in sourceAddr;
         sourceAddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -273,24 +300,7 @@ static void udp_server_task(void *pvParameters)
         ip_protocol = IPPROTO_IPV6;
         inet6_ntoa_r(sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
 #endif
-*/
-#ifdef CONFIG_EXAMPLE_IPV4
-        struct sockaddr_in destAddr;
-        destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        destAddr.sin_family = AF_INET;
-        destAddr.sin_port = htons(RECEIVE_PORT);
-        addr_family = AF_INET;
-        ip_protocol = IPPROTO_IP;
-        inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
-#else // IPV6
-        struct sockaddr_in6 destAddr;
-        bzero(&destAddr.sin6_addr.un, sizeof(destAddr.sin6_addr.un));
-        destAddr.sin6_family = AF_INET6;
-        destAddr.sin6_port = htons(RECEIVE_PORT);
-        addr_family = AF_INET6;
-        ip_protocol = IPPROTO_IPV6;
-        inet6_ntoa_r(destAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
-#endif
+
 
         int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
         if (sock < 0) {
@@ -313,6 +323,14 @@ static void udp_server_task(void *pvParameters)
 
         while (1) {
 
+        	ESP_LOGI(TAG, "Sending data");
+        	t1_sent = esp_log_timestamp();
+        	sprintf(rx_buffer, "%d", t1_sent);
+        	int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&destAddr, sizeof(buf_sourceAddr));
+        	if (err < 0) {
+        	    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+        	    break;
+        	}
             ESP_LOGI(TAG, "Waiting for data");
             int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
             t1_received = esp_log_timestamp();
@@ -420,7 +438,7 @@ void app_main()
 
     TaskHandle_t xHandle = NULL;
     // TODO: create task on the WIFI CPU (CPU_1)
-    xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
+    //xTaskCreate(udp_server_task, "udp_server", 4096, NULL, 5, &xHandle);
     xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, &xHandle);
   // err = xTaskCreatePinnedToCore(quat_task,   // task function
   //  		                      "quat_task",    // task name for debugging
