@@ -196,7 +196,7 @@ static void udp_client_task(void *pvParameters)
 
 
    			    sprintf(payload, "%.5f"
-   					"#linacc,%d,%d,%d"
+   					"#linacc,%5f,%5f,%5f"
    					"#rotvec,%.5f,%.5f,%.5f,%.5f"
    					"#rotmat,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d"
    					"#gyr,%d,%d,%d"
@@ -204,11 +204,11 @@ static void udp_client_task(void *pvParameters)
    					"#grav,%.5f,%.5f,%.5f"
                     "#mag,%d,%d,%d",
    					(float)time_mks_after/1000,
-   					0, 0, 0,
+					acc.x, acc.y, acc.z,
 					quat.w, quat.x, quat.y, quat.z,
 					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 					0, 0, 0,
-					acc.x, acc.y, acc.z,
+					0., 0., 0.,
 					grav.x, grav.x, grav.z,
 					0, 0, 0);
 
