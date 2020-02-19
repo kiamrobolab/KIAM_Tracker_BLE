@@ -48,6 +48,8 @@
 #define I2C_PORT I2C_NUMBER_1
 #endif
 
+#define USE_EXTERNAL_CRYSTAL CONFIG_USE_CRYSTAL
+
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
 
@@ -392,6 +394,13 @@ void app_main()
         exit(1);
     }
 
+    err = bno055_set_ext_crystal_use(I2C_PORT, USE_EXTERNAL_CRYSTAL);
+    if( err != ESP_OK ) {
+        printf("Couldn't set external crystal use\n");
+        err = bno055_close(I2C_PORT);
+        printf("bno055_close() returned 0x%02X \n", err);
+        exit(1);
+    }
     vTaskDelay(1000 / portTICK_RATE_MS);
 
     err = bno055_set_opmode(I2C_PORT, OPERATION_MODE_NDOF);

@@ -47,7 +47,7 @@ config SEND_PORT
     help
         The remote port to which the client example will send data.
         
- config RECEIVE_PORT
+config RECEIVE_PORT
     int "Device port"
     range 0 65535
     default 3333
@@ -66,5 +66,19 @@ config EXAMPLE_I2C_PORT_1
     bool "Port 1"
 
 endchoice
+
+choice EXTERNAL_CRYSTAL
+    prompt "External crystal"
+    help
+        Choose to use external crystal on BNO for timing
+
+config USE_CRYSTAL
+    bool "Yes"
+
+config NOT_USE_CRYSTAL
+    bool "No"
+
+endchoice
+
 
 endmenu
