@@ -56,7 +56,7 @@ const int IPV6_GOTIP_BIT = BIT1;
 
 static const char *TAG = "example";
 static char payload[1024];
-static bool start_flag = false;
+static bool start_flag = true;
 
 static uint32_t offset, delay;
 
@@ -139,13 +139,14 @@ static void udp_client_task(void *pvParameters)
     int n_sent = 0;
     int n_check_sum = 0;
     bno055_quaternion_t quat;
-    bno055_vec3_t acc, grav;
+    bno055_vec3_t lin_accel, grav;
     const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
     TickType_t xLastWakeTime;
 
     while (1) {
 
     	if (start_flag) {
+
 #ifdef CONFIG_EXAMPLE_IPV4
             struct sockaddr_in destAddr;
             destAddr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
@@ -176,20 +177,10 @@ static void udp_client_task(void *pvParameters)
             while (1) {
         	    vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-   			    err = bno055_get_quaternion(I2C_PORT, &quat);
+   			    err = bno055_get_fusion_data(I2C_PORT, &quat, &lin_accel, &grav);
    			    if( err != ESP_OK ) {
-   				    printf("bno055_get_quaternion() returned error: %02x \n", err);
+   				    printf("bno055_get_fusion() returned error: %02x \n", err);
    				    exit(2);
-   			    }
-   			    err = bno055_get_lin_accel(I2C_PORT, &acc);
-   			    if( err != ESP_OK ) {
-   			        printf("bno055_get_lin_accel() returned error: %02x \n", err);
-   			        exit(2);
-   			    }
-   			    err = bno055_get_gravity(I2C_PORT, &grav);
-   			    if( err != ESP_OK ) {
-   			        printf("bno055_get_gravity() returned error: %02x \n", err);
-   			        exit(2);
    			    }
 
    			    time_mks_after = esp_timer_get_time();
@@ -203,13 +194,14 @@ static void udp_client_task(void *pvParameters)
    					"#grav,%.5f,%.5f,%.5f"
                     "#mag,%d,%d,%d",
    					(float)time_mks_after/1000,
-					acc.x, acc.y, acc.z,
+					lin_accel.x, lin_accel.y, lin_accel.z,
 					quat.w, quat.x, quat.y, quat.z,
 					0, 0, 0,
 					0., 0., 0.,
 					grav.x, grav.y, grav.z,
 					0, 0, 0);
 
+   			    ESP_LOGI(TAG, "Message: %s", payload);
                 err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
