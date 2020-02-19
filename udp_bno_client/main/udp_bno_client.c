@@ -56,7 +56,7 @@ const int IPV6_GOTIP_BIT = BIT1;
 
 static const char *TAG = "example";
 static char payload[1024];
-static bool start_flag = true;
+static bool start_flag = false;
 
 static uint32_t offset, delay;
 
@@ -135,11 +135,13 @@ static void udp_client_task(void *pvParameters)
     int ip_protocol;
     esp_err_t err;
     uint32_t time_mks, time_mks_after;
-    float time_check_sum = 0;
+    float time_checksum = 0;
     int n_sent = 0;
-    int n_check_sum = 0;
+    int n_checksum = 0;
+    int n_mes = 0;
     bno055_quaternion_t quat;
     bno055_vec3_t lin_accel, grav;
+    uint8_t calib;
     const TickType_t xFrequency = 10 / portTICK_PERIOD_MS;
     TickType_t xLastWakeTime;
 
@@ -182,18 +184,27 @@ static void udp_client_task(void *pvParameters)
    				    printf("bno055_get_fusion() returned error: %02x \n", err);
    				    exit(2);
    			    }
+   			    err = bno055_get_calib_status_byte(I2C_PORT, &calib);
+   			    if( err != ESP_OK ) {
+   			        printf("bno055_get_calib_status_byte() returned error: %02x \n", err);
+   			        exit(2);
+   			 	}
 
    			    time_mks_after = esp_timer_get_time();
 
 
-   			    sprintf(payload, "%.5f"
+   			    sprintf(payload, "%d"
+   			    	"#time,%.5f"
+   			    	"#calib_status,%d"
    					"#linacc,%5f,%5f,%5f"
    					"#rotvec,%.5f,%.5f,%.5f,%.5f"
    					"#gyr,%d,%d,%d"
    					"#acc,%.5f,%.5f,%.5f"
    					"#grav,%.5f,%.5f,%.5f"
                     "#mag,%d,%d,%d",
+					n_mes,
    					(float)time_mks_after/1000,
+					calib,
 					lin_accel.x, lin_accel.y, lin_accel.z,
 					quat.w, quat.x, quat.y, quat.z,
 					0, 0, 0,
@@ -208,13 +219,14 @@ static void udp_client_task(void *pvParameters)
                     break;
                 }
 
+                n_mes++;
                 n_sent++;
 
-                time_check_sum = time_check_sum + ((float)time_mks_after - (float)time_mks)/1000000;
+                time_checksum = time_checksum + ((float)time_mks_after - (float)time_mks)/1000000;
                 time_mks = time_mks_after;
-                if (time_check_sum > 1)
+                if (time_checksum > 1)
                 {
-            	    sprintf(payload, "#%d %f Checksum#%d", n_sent, time_check_sum, n_check_sum);
+            	    sprintf(payload, "#%d %f Checksum#%d", n_sent, time_checksum, n_checksum);
             	    ESP_LOGI(TAG, "Check sum sent: %s", payload);
             	    err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
             	    if (err < 0)
@@ -222,9 +234,9 @@ static void udp_client_task(void *pvParameters)
             	        ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
             	        break;
             	    }
-            	    time_check_sum = 0;
+            	    time_checksum = 0;
             	    n_sent = 0;
-            	    n_check_sum++;
+            	    n_checksum++;
                 }
             }
 
