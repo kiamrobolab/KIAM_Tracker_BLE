@@ -41,6 +41,11 @@
 
 #define SEND_PORT CONFIG_SEND_PORT
 #define RECEIVE_PORT CONFIG_RECEIVE_PORT
+#ifdef CONFIG_BROADCAST_PORT
+#define BROADCAST_PORT CONFIG_BROADCAST_PORT
+#else
+#define BROADCAST_PORT 5550
+#endif
 
 #ifdef CONFIG_EXAMPLE_I2C_PORT_0
 #define I2C_PORT I2C_NUMBER_0
@@ -254,8 +259,10 @@ static void udp_client_task(void *pvParameters)
 
 static void udp_server_task(void *pvParameters)
 {
+    bool isBroadcasted = false;
     char rx_buffer[1024], parse_buffer[1024];
     char *tokens;
+    const char port_str[4] = itoa(SEND_PORT);
     char addr_str[128];
     int addr_family;
     int ip_protocol;
@@ -265,98 +272,168 @@ static void udp_server_task(void *pvParameters)
 
     while (1) {
 
+// TODO: separate to functions
+        if (isBroadcasted){
+
 #ifdef CONFIG_EXAMPLE_IPV4
-        struct sockaddr_in sourceAddr;
-        sourceAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        sourceAddr.sin_family = AF_INET;
-        sourceAddr.sin_port = htons(RECEIVE_PORT);
-        addr_family = AF_INET;
-        ip_protocol = IPPROTO_IP;
-        inet_ntoa_r(sourceAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
+            struct sockaddr_in sourceAddr;
+            sourceAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            sourceAddr.sin_family = AF_INET;
+            sourceAddr.sin_port = htons(RECEIVE_PORT);
+            addr_family = AF_INET;
+            ip_protocol = IPPROTO_IP;
+            inet_ntoa_r(sourceAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
 #else // IPV6
-        struct sockaddr_in6 sourceAddr;
-        bzero(&sourceAddr.sin6_addr.un, sizeof(sourceAddr.sin6_addr.un));
-        sourceAddr.sin6_family = AF_INET6;
-        sourceAddr.sin6_port = htons(RECEIVE_PORT);
-        addr_family = AF_INET6;
-        ip_protocol = IPPROTO_IPV6;
-        inet6_ntoa_r(sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+            struct sockaddr_in6 sourceAddr;
+            bzero(&sourceAddr.sin6_addr.un, sizeof(sourceAddr.sin6_addr.un));
+            sourceAddr.sin6_family = AF_INET6;
+            sourceAddr.sin6_port = htons(RECEIVE_PORT);
+            addr_family = AF_INET6;
+            ip_protocol = IPPROTO_IPV6;
+            inet6_ntoa_r(sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
 #endif
 
-
-        int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
-        if (sock < 0) {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket created");
-
-        int err = bind(sock, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
-        if (err < 0) {
-            ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-        }
-        ESP_LOGI(TAG, "Socket binded");
-
-        while (1) {
-
-            ESP_LOGI(TAG, "Waiting for data");
-            int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
-            t1_received = esp_timer_get_time();
-            // Error occured during receiving
-            if (len < 0) {
-                ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+            int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+            if (sock < 0) {
+                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
                 break;
             }
-            // Data received
-            else {
-                // Get the sender's ip address as string
-                if (buf_sourceAddr.sin6_family == PF_INET) {
-                    inet_ntoa_r(((struct sockaddr_in *)&buf_sourceAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
-                } else if (buf_sourceAddr.sin6_family == PF_INET6) {
-                    inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+            ESP_LOGI(TAG, "Socket created");
+
+            int err = bind(sock, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
+            if (err < 0) {
+                ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+            }
+            ESP_LOGI(TAG, "Socket binded");
+
+            while (1) {
+
+                ESP_LOGI(TAG, "Waiting for timestamp");
+                int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
+                t1_received = esp_timer_get_time();
+                // Error occured during receiving
+                if (len < 0) {
+                    ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+                    break;
                 }
-
-                if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
-
-                    rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
-
-                    strcpy(parse_buffer, rx_buffer);
-                    tokens = strtok(parse_buffer, ",");
-                    t1_sent = atoi(tokens);
-
-                    vTaskDelay(10 / portTICK_PERIOD_MS);
-
-                    t2_sent = esp_timer_get_time();
-                    sprintf(rx_buffer, "%s,%d,%d", rx_buffer, t1_received, t2_sent);
-
-                    int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
-                    if (err < 0) {
-                        ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
-                        break;
+                // Data received
+                else {
+                    // Get the sender's ip address as string
+                    if (buf_sourceAddr.sin6_family == PF_INET) {
+                        inet_ntoa_r(((struct sockaddr_in *)&buf_sourceAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                    } else if (buf_sourceAddr.sin6_family == PF_INET6) {
+                        inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
                     }
 
-                    while(1) {
-                    	//ESP_LOGI(TAG, "Sent message to %s:%d %d", addr_str, buf_sourceAddr.sin6_port, htons(RECEIVE_PORT));
-                    	len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
-                    	t3_received = esp_timer_get_time();
+                    if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
 
-                    	if (len < 0) {
-                    		ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
-                    		break;
-                    	}
-                    	else {
-                    		rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
-                    		//ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+                        rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
 
-                    		strcpy(parse_buffer, rx_buffer);
-                    		tokens = strtok(parse_buffer, ",");
-                    		t2_received = atoi(tokens + 4);
-                    		t3_sent = atoi(tokens + 5);
+                        strcpy(parse_buffer, rx_buffer);
+                        tokens = strtok(parse_buffer, ",");
+                        t1_sent = atoi(tokens);
 
-                    		offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
-                    		start_flag = true;
-                    	    vTaskDelay(10000 / portTICK_PERIOD_MS);
-                    	}
+                        vTaskDelay(10 / portTICK_PERIOD_MS);
+
+                        t2_sent = esp_timer_get_time();
+                        sprintf(rx_buffer, "%s,%d,%d", rx_buffer, t1_received, t2_sent);
+
+                        int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
+                        if (err < 0) {
+                            ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                            break;
+                        }
+
+                        while(1) {
+                    	    //ESP_LOGI(TAG, "Sent message to %s:%d %d", addr_str, buf_sourceAddr.sin6_port, htons(RECEIVE_PORT));
+                    	    len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
+                    	    t3_received = esp_timer_get_time();
+
+                    	    if (len < 0) {
+                    		    ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+                    		    break;
+                    	    }
+                    	    else {
+                    		    rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+                    		    //ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+
+                    		    strcpy(parse_buffer, rx_buffer);
+                    		    tokens = strtok(parse_buffer, ",");
+                    		    t2_received = atoi(tokens + 4);
+                    		    t3_sent = atoi(tokens + 5);
+
+                    		    offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
+                    		    start_flag = true;
+                    	        vTaskDelay(10000 / portTICK_PERIOD_MS);
+                    	    }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+
+#ifdef CONFIG_EXAMPLE_IPV4
+            struct sockaddr_in sourceAddr;
+            sourceAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            sourceAddr.sin_family = AF_INET;
+            sourceAddr.sin_port = htons(BROADCAST_PORT);
+            addr_family = AF_INET;
+            ip_protocol = IPPROTO_IP;
+            inet_ntoa_r(sourceAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
+#else // IPV6
+            struct sockaddr_in6 sourceAddr;
+            bzero(&sourceAddr.sin6_addr.un, sizeof(sourceAddr.sin6_addr.un));
+            sourceAddr.sin6_family = AF_INET6;
+            sourceAddr.sin6_port = htons(BROADCAST_PORT);
+            addr_family = AF_INET6;
+            ip_protocol = IPPROTO_IPV6;
+            inet6_ntoa_r(sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+#endif
+
+            int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+            if (sock < 0) {
+                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+                break;
+            }
+            ESP_LOGI(TAG, "Socket created");
+
+            int err = bind(sock, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
+            if (err < 0) {
+                ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+            }
+            ESP_LOGI(TAG, "Socket binded");
+
+            while (1) {
+
+                ESP_LOGI(TAG, "Waiting for broadcast");
+                int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
+                // Error occured during receiving
+                if (len < 0) {
+                    ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+                    break;
+                }
+                // Data received
+                else {
+                    // Get the sender's ip address as string
+                    if (buf_sourceAddr.sin6_family == PF_INET) {
+                        inet_ntoa_r(((struct sockaddr_in *)&buf_sourceAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                    } else if (buf_sourceAddr.sin6_family == PF_INET6) {
+                        inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+                    }
+
+                    if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
+
+                        rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+                        sprintf(rx_buffer, "%s#%s", rx_buffer, port_str);
+
+                        int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
+                        if (err < 0) {
+                            ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                            break;
+                        }
+                        isBroadcasted = true;
+                        break;
                     }
                 }
             }
