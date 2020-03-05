@@ -219,7 +219,7 @@ static void udp_client_task(void *pvParameters)
 					grav.x, grav.y, grav.z,
 					0, 0, 0);
 
-   			    ESP_LOGI(TAG, "Message: %s", payload);
+   			    //ESP_LOGI(TAG, "Message: %s", payload);
                 err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&destAddr, sizeof(destAddr));
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
@@ -261,9 +261,12 @@ static void udp_server_task(void *pvParameters)
 {
     bool isBroadcasted = false;
     char rx_buffer[1024], parse_buffer[1024];
-    char *tokens;
-    const char port_str[4] = itoa(SEND_PORT);
-    char addr_str[128];
+    const char *tokens;
+
+    const char port_str[5];
+    itoa(SEND_PORT, port_str, 10);
+
+    const char addr_str[128];
     int addr_family;
     int ip_protocol;
     struct sockaddr_in6 buf_sourceAddr; // Large enough for both IPv4 or IPv6
@@ -370,6 +373,11 @@ static void udp_server_task(void *pvParameters)
                     }
                 }
             }
+            if (sock != -1) {
+                ESP_LOGE(TAG, "Shutting down socket and restarting...");
+                shutdown(sock, 0);
+                close(sock);
+            }
         }
         else {
 
@@ -421,11 +429,11 @@ static void udp_server_task(void *pvParameters)
                     } else if (buf_sourceAddr.sin6_family == PF_INET6) {
                         inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
                     }
-
                     if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
 
                         rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
                         sprintf(rx_buffer, "%s#%s", rx_buffer, port_str);
+                        printf("%s\n", port_str);
 
                         int err = sendto(sock, rx_buffer, strlen(rx_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
                         if (err < 0) {
@@ -437,12 +445,11 @@ static void udp_server_task(void *pvParameters)
                     }
                 }
             }
-        }
-
-        if (sock != -1) {
-            ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
+            if (sock != -1) {
+                ESP_LOGE(TAG, "Shutting down socket and restarting...");
+                shutdown(sock, 0);
+                close(sock);
+            }
         }
     }
     vTaskDelete(NULL);
