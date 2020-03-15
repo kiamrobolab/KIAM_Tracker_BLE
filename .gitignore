@@ -11,3 +11,6 @@ sdkconfig.old
 .project
 .cproject
 .settings
+
+#ignore vscode files
+.vscode
