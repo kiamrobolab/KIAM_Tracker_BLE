@@ -287,6 +287,8 @@ static void timesync_handler(int sock)
         // Error occured during receiving
         if (len < 0) {
             ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+            isSynchronized = false;
+            isBroadcasted = false;
             break;
         }
         // Data received
@@ -317,28 +319,26 @@ static void timesync_handler(int sock)
                     break;
                 }
 
-                while(1) {
-                    //ESP_LOGI(TAG, "Sent message to %s:%d %d", addr_str, buf_sourceAddr.sin6_port, htons(RECEIVE_PORT));
-                    len = recvfrom(sock, time_str, sizeof(time_str) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
-                    t3_received = esp_timer_get_time();
+                len = recvfrom(sock, time_str, sizeof(time_str) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
+                t3_received = esp_timer_get_time();
 
-                    if (len < 0) {
-                        ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
-                    	break;
-                    }
-                    else {
-                        time_str[len] = 0; // Null-terminate whatever we received and treat like a string...
-                    	//ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+                if (len < 0) {
+                    ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+                    isBroadcasted = false;
+                  	break;
+                }
+                else {
+                    time_str[len] = 0; // Null-terminate whatever we received and treat like a string...
+                  	//ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
 
-                    	strcpy(buffer, time_str);
-                    	tokens = strtok(buffer, ",");
-                    	t2_received = atoi(tokens + 4);
-                    	t3_sent = atoi(tokens + 5);
+                   	strcpy(buffer, time_str);
+                   	tokens = strtok(buffer, ",");
+                   	t2_received = atoi(tokens + 4);
+                   	t3_sent = atoi(tokens + 5);
 
-                    	offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
-                    	isSynchronized = true;
-                    	vTaskDelay(10000 / portTICK_PERIOD_MS);
-                    }
+                   	offset = (t2_received - t2_sent - t3_received + t3_sent) / 2;
+                   	isSynchronized = true;
+                   	vTaskDelay(10000 / portTICK_PERIOD_MS);
                 }
             }
         }
@@ -368,7 +368,7 @@ static void broadcast_handler(int sock)
             if (buf_sourceAddr.sin6_family == PF_INET) {
                 inet_ntoa_r(((struct sockaddr_in *)&buf_sourceAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
             } else if (buf_sourceAddr.sin6_family == PF_INET6) {
-                    inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+                inet6_ntoa_r(buf_sourceAddr.sin6_addr, addr_str, sizeof(addr_str) - 1);
             }
             if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
 
@@ -391,6 +391,10 @@ static void udp_server_task(void *pvParameters)
 {
     int addr_family;
     int ip_protocol;
+
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
 
     while (1) {
 
@@ -426,6 +430,12 @@ static void udp_server_task(void *pvParameters)
                 ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
             }
             ESP_LOGI(TAG, "Socket binded");
+
+            if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+                ESP_LOGE(TAG, "... failed to set socket receiving timeout");
+                close(sock);
+                continue;
+            }
 
             timesync_handler(sock);
 
