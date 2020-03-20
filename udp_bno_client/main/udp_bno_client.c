@@ -160,8 +160,11 @@ static void send_bno_fusion(int sock, struct sockaddr_in* address)
     int n_checksum = 0;
     uint8_t calib;
     bno055_quaternion_t quat = {0, 0, 0, 0};
-    bno055_vec3_t lin_accel = grav = {0, 0, 0};
-    bno055_vec3_t gyr = acc = mag = {0, 0, 0};
+    bno055_vec3_t lin_accel = {0, 0, 0};
+    bno055_vec3_t grav = {0, 0, 0};
+    bno055_vec3_t gyr = {0, 0, 0};
+    bno055_vec3_t acc = {0, 0, 0};
+    bno055_vec3_t mag = {0, 0, 0};
 
 #ifdef CONFIG_EXAMPLE_IPV4
     socklen_t socklen = sizeof(struct sockaddr_in);
@@ -208,7 +211,7 @@ static void send_bno_fusion(int sock, struct sockaddr_in* address)
 				quat.w, quat.x, quat.y, quat.z,
 				grav.x, grav.y, grav.z,
 				gyr.x, gyr.y, gyr.z,
-				acc.x, acc.y., acc.z,
+				acc.x, acc.y, acc.z,
 				mag.x, mag.y, mag.z);
 
         err = sendto(sock, payload, strlen(payload), 0, address, &socklen);
@@ -290,7 +293,7 @@ static void timesync_handler(int sock)
     struct sockaddr_in6 buf_sourceAddr; // Large enough for both IPv4 or IPv6
     socklen_t socklen = sizeof(buf_sourceAddr);
 
-    const char time_str[256];
+    char time_str[256];
 
     const char *tokens;
     uint32_t t1_sent, t1_received, t2_sent, t2_received, t3_sent, t3_received;
@@ -365,7 +368,7 @@ static void broadcast_handler(int sock)
 {
     const char port_str[5];
     itoa(SEND_PORT, port_str, 10);
-    const char mes_buffer[1024];
+    char mes_buffer[1024];
     const char *tokens;
 
     struct sockaddr_in6 buf_sourceAddr; // Large enough for both IPv4 or IPv6
