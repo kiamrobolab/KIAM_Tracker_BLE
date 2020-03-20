@@ -55,6 +55,13 @@
 
 #define USE_EXTERNAL_CRYSTAL CONFIG_USE_CRYSTAL
 
+enum modes{
+    FUSION_MODE,
+    RAW_MODE
+};
+static const char* FUSION_MES = "fusion";
+static const char* RAW_MES = "raw";
+
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
 
@@ -64,11 +71,12 @@ const int IPV6_GOTIP_BIT = BIT1;
 static const char *TAG = "example";
 static char buffer[1024];
 static char payload[1024];
-static char time_str[256];
-const char addr_str[128];
+static char addr_str[128];
 
 static bool isSynchronized = false;
 static bool isBroadcasted = false;
+
+static bool mode = FUSION_MODE;
 
 static uint32_t offset, delay;
 
@@ -151,8 +159,9 @@ static void send_bno_fusion(int sock, struct sockaddr_in* address)
     int n_sent = 0;
     int n_checksum = 0;
     uint8_t calib;
-    bno055_quaternion_t quat;
-    bno055_vec3_t lin_accel, grav;
+    bno055_quaternion_t quat = {0, 0, 0, 0};
+    bno055_vec3_t lin_accel = grav = {0, 0, 0};
+    bno055_vec3_t gyr = acc = mag = {0, 0, 0};
 
 #ifdef CONFIG_EXAMPLE_IPV4
     socklen_t socklen = sizeof(struct sockaddr_in);
@@ -165,8 +174,13 @@ static void send_bno_fusion(int sock, struct sockaddr_in* address)
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-   	    err = bno055_get_fusion_data(I2C_PORT, &quat, &lin_accel, &grav);
-   		if( err != ESP_OK ) {
+        if (mode == FUSION_MODE) {
+       	    err = bno055_get_fusion_data(I2C_PORT, &quat, &lin_accel, &grav);
+        } else {
+            // TODO: change function with read raw data function
+            err = bno055_get_fusion_data(I2C_PORT, &quat, &lin_accel, &grav);
+        }
+        if( err != ESP_OK ) {
    		    printf("bno055_get_fusion() returned error: %02x \n", err);
    		    exit(2);
    		}
@@ -183,19 +197,19 @@ static void send_bno_fusion(int sock, struct sockaddr_in* address)
 		    	"#calib_status,%d"
 				"#linacc,%5f,%5f,%5f"
 				"#rotvec,%.5f,%.5f,%.5f,%.5f"
-				"#gyr,%d,%d,%d"
-				"#acc,%.5f,%.5f,%.5f"
 				"#grav,%.5f,%.5f,%.5f"
-                "#mag,%d,%d,%d",
+				"#gyr,%.5f,%.5f,%.5f"
+				"#acc,%.5f,%.5f,%.5f"
+                "#mag,%.5f,%.5f,%.5f",
 				n_mes,
 				(float)time_mks_after/1000,
 				calib,
 				lin_accel.x, lin_accel.y, lin_accel.z,
 				quat.w, quat.x, quat.y, quat.z,
-				0, 0, 0,
-				0., 0., 0.,
 				grav.x, grav.y, grav.z,
-				0, 0, 0);
+				gyr.x, gyr.y, gyr.z,
+				acc.x, acc.y., acc.z,
+				mag.x, mag.y, mag.z);
 
         err = sendto(sock, payload, strlen(payload), 0, address, &socklen);
         if (err < 0) {
@@ -276,6 +290,8 @@ static void timesync_handler(int sock)
     struct sockaddr_in6 buf_sourceAddr; // Large enough for both IPv4 or IPv6
     socklen_t socklen = sizeof(buf_sourceAddr);
 
+    const char time_str[256];
+
     const char *tokens;
     uint32_t t1_sent, t1_received, t2_sent, t2_received, t3_sent, t3_received;
 
@@ -349,6 +365,8 @@ static void broadcast_handler(int sock)
 {
     const char port_str[5];
     itoa(SEND_PORT, port_str, 10);
+    const char mes_buffer[1024];
+    const char *tokens;
 
     struct sockaddr_in6 buf_sourceAddr; // Large enough for both IPv4 or IPv6
     socklen_t socklen = sizeof(buf_sourceAddr);
@@ -356,7 +374,7 @@ static void broadcast_handler(int sock)
     while (1) {
 
         ESP_LOGI(TAG, "Waiting for broadcast");
-        int len = recvfrom(sock, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
+        int len = recvfrom(sock, mes_buffer, sizeof(mes_buffer) - 1, 0, (struct sockaddr *)&buf_sourceAddr, &socklen);
         // Error occured during receiving
         if (len < 0) {
             ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
@@ -372,10 +390,22 @@ static void broadcast_handler(int sock)
             }
             if (strcmp(addr_str, HOST_IP_ADDR) == 0) {
 
-                buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
-                sprintf(buffer, "%s#%s", buffer, port_str);
+                mes_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
 
-                int err = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
+                strcpy(buffer, mes_buffer);
+                tokens = strtok(buffer, "#");
+                if (strcmp((tokens + 1), FUSION_MES) == 0) {
+                    mode = FUSION_MODE;
+                } else if (strcmp((tokens + 1), RAW_MES) == 0){
+                    mode = RAW_MODE;
+                } else {
+                    mode = FUSION_MODE;
+                    ESP_LOGI(TAG, "Unknown mode, use fusion mode as default");
+                }
+
+                sprintf(mes_buffer, "%s#%s", mes_buffer, port_str);
+
+                int err = sendto(sock, mes_buffer, strlen(mes_buffer), 0, (struct sockaddr *)&buf_sourceAddr, sizeof(buf_sourceAddr));
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
                     break;
