@@ -395,7 +395,7 @@ static void broadcast_handler(int sock)
 
                 mes_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
 
-                strcpy(buffer, mes_buffer);
+                /*strcpy(buffer, mes_buffer);
                 tokens = strtok(buffer, "#");
                 if (strcmp((tokens + 1), FUSION_MES) == 0) {
                     mode = FUSION_MODE;
@@ -404,7 +404,7 @@ static void broadcast_handler(int sock)
                 } else {
                     mode = FUSION_MODE;
                     ESP_LOGI(TAG, "Unknown mode, use fusion mode as default");
-                }
+                }*/
 
                 sprintf(mes_buffer, "%s#%s", mes_buffer, port_str);
 
